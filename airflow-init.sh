@@ -76,7 +76,8 @@ airflow connections delete minio || true
 add_connection_if_not_exists 'spark' \
   --conn-type 'spark' \
   --conn-host 'spark://spark-master' \
-  --conn-port 7077
+  --conn-port 7077 \
+  --conn-extra '{"deploy_mode": "cluster", "spark_binary": "spark-submit"}'
 
 # PostgreSQL connection
 add_connection_if_not_exists 'postgres' \

@@ -80,8 +80,8 @@ def create_spark_session(app_name: str):
     """
     Create a SparkSession with necessary configurations
     """
-    clickhouse_jar = os.path.abspath(get_airflow_variables("AIRFLOW_PATH") + "driver/clickhouse-jdbc-0.4.6.jar")
-    postgres_jar = os.path.abspath(get_airflow_variables("AIRFLOW_PATH") + "driver/postgresql-42.7.5.jar")
+    clickhouse_jar = os.path.abspath(get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/clickhouse-jdbc-0.4.6.jar")
+    postgres_jar = os.path.abspath(get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/postgresql-42.7.5.jar")
     jars = f"{clickhouse_jar},{postgres_jar}"
     logger.info(f"Creating SparkSession...")
     try:
@@ -244,7 +244,7 @@ def extract(table_source : dict):
         logger.info("Initiate storing extracted data into staging phase...")
         try:
             for schemaname, tablename in table_source:
-                staging_path_write = get_airflow_variables("AIRFLOW_PATH") + f"staging/{CURRENT_DATE_STR}.{schemaname}.{tablename}.parquet"
+                staging_path_write = get_airflow_variables("LOCAL_AIRFLOW_PATH") + f"staging/{CURRENT_DATE_STR}.{schemaname}.{tablename}.parquet"
                 dataframes[tablename].write.parquet(staging_path_write, mode="overwrite")
                 end_time = time.perf_counter()
                 logger.info(f"Success storing staging data in {end_time - start_time:.2f} : {tablename}")
@@ -261,7 +261,7 @@ def transform(table_source : dict):
     dataframes = {}
     try:
         for schemaname, tablename in table_source:
-            staging_path_write = get_airflow_variables("AIRFLOW_PATH") + f"staging/{CURRENT_DATE_STR}.{schemaname}.{tablename}.parquet"
+            staging_path_write = get_airflow_variables("LOCAL_AIRFLOW_PATH") + f"staging/{CURRENT_DATE_STR}.{schemaname}.{tablename}.parquet"
             df = spark.read \
                 .format("parquet") \
                 .load(staging_path_write)
@@ -298,7 +298,7 @@ def transform(table_source : dict):
                 count_distinct("customer_key").alias("count_transacting_customer")
             )
         )
-        transformed_path_write = get_airflow_variables("AIRFLOW_PATH") + f"transformed/{CURRENT_DATE_STR}.{SINK_TABLENAME}.parquet"
+        transformed_path_write = get_airflow_variables("LOCAL_AIRFLOW_PATH") + f"transformed/{CURRENT_DATE_STR}.{SINK_TABLENAME}.parquet"
         transformed_df.write.parquet(transformed_path_write, mode="overwrite")
         end_time = time.perf_counter()
         logger.info(f"Data transformed succesfully in {end_time - start_time:.2f} : {SINK_TABLENAME}")
@@ -342,7 +342,7 @@ def load(sink_tablename : str):
     """
     ch_client.command(ch_prod_ddl)
 
-    transformed_path = get_airflow_variables("AIRFLOW_PATH") + f"transformed/{CURRENT_DATE_STR}.{sink_tablename}.parquet"
+    transformed_path = get_airflow_variables("LOCAL_AIRFLOW_PATH") + f"transformed/{CURRENT_DATE_STR}.{sink_tablename}.parquet"
     try:
         transformed_df = spark.read.parquet(transformed_path)
         logger.info(f"Read from transformed success : {sink_tablename}")

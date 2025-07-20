@@ -1,6 +1,4 @@
 apache-airflow-providers-postgres
-apache-airflow-providers-redis
-apache-airflow-providers-cncf-kubernetes
 apache-airflow-providers-apache-spark
 clickhouse-connect
 pendulum

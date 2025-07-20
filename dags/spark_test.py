@@ -16,16 +16,17 @@ with DAG(
     dag_id='spark_test',
     default_args=default_args,
     schedule_interval=None,
-    catchup=False
+    catchup=False,
+    tags=['spark']
 ) as dag:
-    
-    spark_submit = SparkSubmitOperator(
-        task_id='submit_spark_job',
-        application='/opt/airflow/dags/spark-jobs/test_job.py',
-        conn_id='spark',
-        conf={
-            "spark.jars.ivy": "/opt/bitnami/.ivy2"
-        },
+
+    spark_test_job = SparkSubmitOperator(
+        task_id="run_spark_job",
+        application="/opt/bitnami/spark/jobs/test_job.py",  # mounted on spark-master
+        conn_id="spark",  # make sure you configure this in Airflow UI
+        name="arrow-spark",
+        conf={"spark.jars.ivy": "/opt/bitnami/.ivy2"},
+        verbose=True
     )
 
-    spark_submit
+    spark_test_job

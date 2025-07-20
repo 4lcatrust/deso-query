@@ -154,8 +154,6 @@ services:
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
       - ./variables.json:/opt/airflow/variables.json
-      - ./spark/jobs:/opt/airflow/dags/spark-jobs
-      - ./spark/jars/:/opt/spark-client/jars
     command: >
       bash -c "
         /opt/airflow/init.sh &&
@@ -184,8 +182,6 @@ services:
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
       - ./variables.json:/opt/airflow/variables.json
-      - ./spark/jobs:/opt/airflow/dags/spark-jobs
-      - ./spark/jars/:/opt/spark-client/jars
     command: ["airflow", "scheduler"]
     networks:
       - db_network
@@ -210,8 +206,6 @@ services:
       - ./logs:/opt/airflow/logs
       - ./plugins:/opt/airflow/plugins
       - ./variables.json:/opt/airflow/variables.json
-      - ./spark/jobs:/opt/airflow/dags/spark-jobs
-      - ./spark/jars/:/opt/spark-client/jars
     command: ["airflow", "celery", "worker"]
     networks:
       - db_network
