@@ -29,7 +29,7 @@ with DAG(
     extract_dq_task = SparkSubmitOperator(
         task_id="extract_dq",
         conn_id="spark",
-        application=get_airflow_variables("AIRFLOW_PATH") + "spark-jobs/daily_transaction_summary_extract_dq.py",
+        application=get_airflow_variables("LOCAL_AIRFLOW_PATH") + "spark-jobs/daily_transaction_summary_extract_dq.py",
         name="daily_transaction_summary_extract_and_dq",
         conf={
             "spark.jars.ivy": "/opt/bitnami/.ivy2",
@@ -45,12 +45,12 @@ with DAG(
             "spark.hadoop.fs.s3a.connection.ssl.enabled": "false"
         },
         # jars=",".join([
-        #     get_airflow_variables("AIRFLOW_PATH") + "driver/postgresql-42.7.5.jar",
-        #     get_airflow_variables("AIRFLOW_PATH") + "driver/clickhouse-jdbc-0.8.0.jar",
-        #     get_airflow_variables("AIRFLOW_PATH") + "driver/hadoop-aws-3.3.6.jar",
-        #     get_airflow_variables("AIRFLOW_PATH") + "driver/hadoop-common-3.3.6.jar",
-        #     get_airflow_variables("AIRFLOW_PATH") + "driver/hadoop-auth-3.3.6.jar",
-        #     get_airflow_variables("AIRFLOW_PATH") + "driver/aws-java-sdk-bundle-1.11.1026.jar",
+        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/postgresql-42.7.5.jar",
+        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/clickhouse-jdbc-0.8.0.jar",
+        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/hadoop-aws-3.3.6.jar",
+        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/hadoop-common-3.3.6.jar",
+        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/hadoop-auth-3.3.6.jar",
+        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/aws-java-sdk-bundle-1.11.1026.jar",
         # f"{shared_jar_path}/postgresql-42.7.5.jar",
         # f"{shared_jar_path}/clickhouse-jdbc-0.8.0.jar",
         # f"{shared_jar_path}/hadoop-aws-3.3.6.jar",

@@ -67,6 +67,7 @@ done
 echo "🔗 Creating connections..."
 
 # Delete existing connections (ignore errors if not present)
+airflow connections delete livy || true
 airflow connections delete spark || true
 airflow connections delete postgres || true
 airflow connections delete clickhouse || true
@@ -78,6 +79,12 @@ add_connection_if_not_exists 'spark' \
   --conn-host 'spark://spark-master' \
   --conn-port 7077 \
   --conn-extra '{"deploy_mode": "cluster", "spark_binary": "spark-submit"}'
+
+add_connection_if_not_exists 'livy' \
+  --conn-type 'livy' \
+  --conn-host 'spark-master' \
+  --conn-port 8998 \
+  --conn-extra '{"spark.master": "spark://spark-master:7077", "spark.submit.deployMode": "cluster"}'
 
 # PostgreSQL connection
 add_connection_if_not_exists 'postgres' \
