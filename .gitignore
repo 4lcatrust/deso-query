@@ -1,0 +1,16 @@
+logs/
+logs/dag_processor_manager/*.log
+.log
+xl.meta
+__pycache__/*.pyc
+spark/jars/*.jar
+.DS_Store
+.ipynb
+dags/.DS_Store
+dags/.ipynb_checkpoints
+dags/__pycache__/
+dags/.pytest_cache/
+**/.minio.sys/
+**/.minio.sys/**
+minio/data/
+pat.key

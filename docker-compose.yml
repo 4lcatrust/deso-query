@@ -1,0 +1,227 @@
+version: '3.9'
+    
+services:
+  # DB Sources
+  postgres:
+    image: postgres:17-alpine
+    container_name: postgres_db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: public
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres:/backup
+      - ./postgres-init.sql:/docker-entrypoint-initdb.d/postgres-init.sql
+    networks:
+      - db_network
+
+  # DB Sink
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: clickhouse_db
+    restart: always
+    environment:
+      CLICKHOUSE_USER: clickhouse
+      CLICKHOUSE_PASSWORD: clickhouse
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123"
+      - "9009:9000"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./clickhouse/clickhouse-init.sql:/docker-entrypoint-initdb.d/clickhouse-init.sql
+      - ./clickhouse/clickhouse-config.xml:/etc/clickhouse-server/config.xml
+      - ./clickhouse/clickhouse-user.xml:/etc/clickhouse-server/users.xml
+    networks:
+      - db_network
+
+  # Storage Layer
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    entrypoint: /bin/bash -c "chmod +x /entrypoint.sh && /entrypoint.sh"
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - ./minio/data:/data
+      - ./minio/minio-init.sh:/entrypoint.sh
+    networks:
+      - db_network
+
+  # Spark Cluster
+  spark-master:
+    image: bitnami/spark:latest
+    container_name: spark-master
+    environment:
+      - SPARK_MODE=master
+      - SPARK_SUBMIT_OPTIONS=--conf spark.jars.ivy=/opt/bitnami/.ivy2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    ports:
+      - "8000:8080"
+      - "7077:7077"
+    volumes:
+      - ./spark/jobs:/opt/bitnami/spark/jobs
+      - ./spark/jars/:/opt/bitnami/spark/user-jars
+      - ./spark/conf:/opt/bitnami/spark/conf
+      - ./spark/etc_passwd:/etc/passwd
+    networks:
+      - db_network
+
+  spark-worker-1:
+    image: bitnami/spark:latest
+    container_name: spark-worker-1
+    environment:
+      - SPARK_MODE=worker
+      - SPARK_SUBMIT_OPTIONS=--conf spark.jars.ivy=/opt/bitnami/.ivy2
+      - SPARK_MASTER_URL=spark://spark-master:7077
+      - SPARK_WORKER_MEMORY=2G
+      - SPARK_WORKER_CORES=2
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+    volumes:
+      - ./spark/jobs:/opt/bitnami/spark/jobs
+      - ./spark/jars/:/opt/bitnami/spark/user-jars
+      - ./spark/etc_passwd:/etc/passwd
+    depends_on:
+      - spark-master
+    networks:
+      - db_network
+
+  # Redis
+  redis:
+    image: redis:alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - db_network
+
+  # Orchestrator
+  airflow_db:
+    image: postgres:17-alpine
+    container_name: airflow_db
+    restart: always
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    ports:
+      - "5433:5432"
+    volumes:
+      - airflow_db:/var/lib/postgresql/data
+    networks:
+      - db_network
+
+  airflow_webserver:
+    image: custom-airflow:latest
+    container_name: airflow_webserver
+    restart: always
+    depends_on:
+      - airflow_db
+      - redis
+      - postgres
+      - clickhouse
+      - minio
+      - spark-master
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: 'true'
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      JAVA_HOME: "/usr/lib/jvm/java-17-openjdk-amd64"
+      POSTGRES_USER: airflow 
+      POSTGRES_PASSWORD: airflow 
+      POSTGRES_DB: airflow
+      AIRFLOW_DB_HOST: airflow_db 
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./variables.json:/opt/airflow/variables.json
+      - ./spark/jobs:/opt/airflow/dags/spark-jobs
+      - ./spark/jars/:/opt/spark-client/jars
+    command: >
+      bash -c "
+        /opt/airflow/init.sh &&
+        airflow webserver
+      "
+    networks:
+      - db_network
+
+  airflow_scheduler:
+    image: custom-airflow:latest
+    container_name: airflow_scheduler
+    restart: always
+    depends_on:
+      airflow_webserver:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__WEBSERVER__RBAC: "True"
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      JAVA_HOME: "/usr/lib/jvm/java-17-openjdk-amd64"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./variables.json:/opt/airflow/variables.json
+      - ./spark/jobs:/opt/airflow/dags/spark-jobs
+      - ./spark/jars/:/opt/spark-client/jars
+    command: ["airflow", "scheduler"]
+    networks:
+      - db_network
+
+  airflow_worker:
+    image: custom-airflow:latest
+    container_name: airflow_worker
+    restart: always
+    depends_on:
+      airflow_scheduler:
+        condition: service_started
+    environment:
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql+psycopg2://airflow:airflow@airflow_db:5432/airflow
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__WEBSERVER__RBAC: "True"
+      AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+      JAVA_HOME: "/usr/lib/jvm/java-17-openjdk-amd64"
+    volumes:
+      - ./dags:/opt/airflow/dags
+      - ./logs:/opt/airflow/logs
+      - ./plugins:/opt/airflow/plugins
+      - ./variables.json:/opt/airflow/variables.json
+      - ./spark/jobs:/opt/airflow/dags/spark-jobs
+      - ./spark/jars/:/opt/spark-client/jars
+    command: ["airflow", "celery", "worker"]
+    networks:
+      - db_network
+
+volumes:
+  postgres_data:
+  clickhouse_data:
+  minio_data:
+  airflow_db:
+
+networks:
+  db_network:
+    driver: bridge
