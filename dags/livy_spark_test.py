@@ -13,7 +13,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id='spark_test_livy',
+    dag_id='livy_spark_test',
     default_args=default_args,
     schedule_interval=None,
     catchup=False,
@@ -21,14 +21,15 @@ with DAG(
 ) as dag:
 
     spark_test_job = LivyOperator(
-        task_id="run_spark_job",
+        task_id="run_spark_job_cluster",
+        livy_conn_id="livy",
         file="/opt/bitnami/spark/jobs/test_job.py",
-        livy_conn_id="livy"
-        # conf={
-        #     "spark.master": "spark://spark-master:7077",
-        #     "spark.submit.deployMode": "cluster",
-        #     "spark.app.name": "arrow-spark"
-        # }
+        conf={
+            "spark.master":"spark://spark-master:7077",
+            "spark.submit.deployMode":"cluster",
+            "spark.app.name":"arrow-spark",
+            "spark.pyspark.python":"python3"
+            },
     )
 
     spark_test_job

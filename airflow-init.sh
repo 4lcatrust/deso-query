@@ -64,6 +64,14 @@ until curl -s http://spark-master:8080 > /dev/null 2>&1; do
     sleep 2
 done
 
+# Wait for Livy
+echo "🔍 Checking Livy..."
+until curl -sf http://livy:8998/sessions > /dev/null 2>&1; do
+  echo "Waiting for Livy..."
+  sleep 2
+done
+
+
 echo "🔗 Creating connections..."
 
 # Delete existing connections (ignore errors if not present)
@@ -82,9 +90,9 @@ add_connection_if_not_exists 'spark' \
 
 add_connection_if_not_exists 'livy' \
   --conn-type 'livy' \
-  --conn-host 'spark-master' \
+  --conn-host 'livy' \
   --conn-port 8998 \
-  --conn-extra '{"spark.master": "spark://spark-master:7077", "spark.submit.deployMode": "cluster"}'
+  --conn-extra '{"auth_type": "NONE"}'
 
 # PostgreSQL connection
 add_connection_if_not_exists 'postgres' \
