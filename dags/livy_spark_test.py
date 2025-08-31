@@ -26,9 +26,10 @@ with DAG(
         file="/opt/bitnami/spark/jobs/test_job.py",
         conf={
             "spark.master":"spark://spark-master:7077",
-            "spark.submit.deployMode":"cluster",
             "spark.app.name":"arrow-spark",
-            "spark.pyspark.python":"python3"
+            "spark.pyspark.python":"python3",
+            "spark.driver.memory": "512m",
+            "spark.executor.memory": "512m",
             },
     )
 

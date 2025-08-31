@@ -1,6 +1,6 @@
 from airflow import DAG
 from airflow.operators.dummy import DummyOperator
-from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
+from airflow.providers.apache.livy.operators.livy import LivyOperator
 from datetime import datetime, timedelta
 from module.utilities import get_airflow_variables
 
@@ -26,46 +26,41 @@ with DAG(
         dag=dag
     )
 
-    extract_dq_task = SparkSubmitOperator(
-        task_id="extract_dq",
-        conn_id="spark",
-        application=get_airflow_variables("LOCAL_AIRFLOW_PATH") + "spark-jobs/daily_transaction_summary_extract_dq.py",
-        name="daily_transaction_summary_extract_and_dq",
-        conf={
-            "spark.jars.ivy": "/opt/bitnami/.ivy2",
-            "spark.driver.userClassPathFirst": "true",
-            "spark.executor.userClassPathFirst": "true",
-            "spark.driver.extraClassPath": "/opt/bitnami/spark/jars/*",
-            "spark.executor.extraClassPath": "/opt/bitnami/spark/jars/*",
-            "spark.hadoop.fs.s3a.access.key": get_airflow_variables("MINIO_ACCESS_KEY"),
-            "spark.hadoop.fs.s3a.secret.key": get_airflow_variables("MINIO_SECRET_KEY"),
-            "spark.hadoop.fs.s3a.endpoint": "http://minio:9000",
-            "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
-            "spark.hadoop.fs.s3a.path.style.access": "true",
-            "spark.hadoop.fs.s3a.connection.ssl.enabled": "false"
-        },
-        # jars=",".join([
-        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/postgresql-42.7.5.jar",
-        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/clickhouse-jdbc-0.8.0.jar",
-        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/hadoop-aws-3.3.6.jar",
-        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/hadoop-common-3.3.6.jar",
-        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/hadoop-auth-3.3.6.jar",
-        #     get_airflow_variables("LOCAL_AIRFLOW_PATH") + "driver/aws-java-sdk-bundle-1.11.1026.jar",
-        # f"{shared_jar_path}/postgresql-42.7.5.jar",
-        # f"{shared_jar_path}/clickhouse-jdbc-0.8.0.jar",
-        # f"{shared_jar_path}/hadoop-aws-3.3.6.jar",
-        # f"{shared_jar_path}/hadoop-common-3.3.6.jar",
-        # f"{shared_jar_path}/hadoop-auth-3.3.6.jar",
-        # f"{shared_jar_path}/aws-java-sdk-bundle-1.11.1026.jar",
-        # f"{shared_jar_path}/woodstox-core-6.4.0.jar",
-        # ]),
-        application_args=[
-            "--pg_url", get_airflow_variables("POSTGRES_JDBC_URL"),
-            "--pg_user", get_airflow_variables("POSTGRES_USER"),
-            "--pg_pass", get_airflow_variables("POSTGRES_PASSWORD"),
-            "--exec_date", "{{ ds }}"
-        ],
-        dag=dag
+    extract_dq_task = LivyOperator(
+    task_id="extract_dq",
+    livy_conn_id="livy",   # Airflow connection: host=livy, port=8998, extras {"auth_type":"NONE"}
+    file="/opt/bitnami/spark/jobs/daily_transaction_summary_extract_dq.py",
+    # Conf that IS allowed per job:
+    conf={
+        "spark.app.name": "daily_transaction_summary_extract_and_dq",
+        "spark.pyspark.python": "python3",
+        # classpath / s3 configs (these are fine to pass here)
+        "spark.jars.ivy": "/opt/bitnami/.ivy2",
+        "spark.driver.userClassPathFirst": "true",
+        "spark.executor.userClassPathFirst": "true",
+        "spark.driver.extraClassPath": "/opt/bitnami/spark/jars/*",
+        "spark.executor.extraClassPath": "/opt/bitnami/spark/jars/*",
+
+        # MinIO / S3A access (works with your bitnami spark + hadoop-aws setup)
+        "spark.hadoop.fs.s3a.access.key": get_airflow_variables("MINIO_ACCESS_KEY"),
+        "spark.hadoop.fs.s3a.secret.key": get_airflow_variables("MINIO_SECRET_KEY"),
+        "spark.hadoop.fs.s3a.endpoint": "http://minio:9000",
+        "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
+        "spark.hadoop.fs.s3a.path.style.access": "true",
+        "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
+        # Resources
+        "spark.driver.memory": "1g",
+        "spark.executor.memory": "1g",
+        "spark.executor.cores": "1",
+        "spark.executor.instances": "1",
+    },
+    args=[
+        "--pg_url", get_airflow_variables("POSTGRES_JDBC_URL"),
+        "--pg_user", get_airflow_variables("POSTGRES_USER"),
+        "--pg_pass", get_airflow_variables("POSTGRES_PASSWORD"),
+        "--exec_date", "{{ ds }}",
+    ],
+    dag=dag,
     )
 
     start_task >> extract_dq_task
