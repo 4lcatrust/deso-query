@@ -1,5 +1,6 @@
 from airflow import DAG
 from airflow.providers.apache.livy.operators.livy import LivyOperator
+from airflow.utils.trigger_rule import TriggerRule
 from datetime import datetime, timedelta
 
 default_args = {
@@ -22,6 +23,7 @@ with DAG(
 
     spark_test_job = LivyOperator(
         task_id="run_spark_job_cluster",
+        trigger_rule=TriggerRule.ALL_SUCCESS,
         livy_conn_id="livy",
         file="/opt/bitnami/spark/jobs/test_job.py",
         conf={
@@ -31,6 +33,7 @@ with DAG(
             "spark.driver.memory": "512m",
             "spark.executor.memory": "512m",
             },
+        polling_interval=5,      # seconds; >0 means “keep polling until done”
     )
 
     spark_test_job
