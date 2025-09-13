@@ -111,6 +111,12 @@ services:
       - spark-worker-1
     ports:
       - "8998:8998"
+    environment:
+      - USER=airflow
+      - HADOOP_USER_NAME=airflow
+      - SPARK_USER=airflow
+      - SPARK_SUBMIT_OPTS=-Duser.name=airflow
+      - JAVA_TOOL_OPTIONS=-Duser.name=airflow
     volumes:
       - ./spark/jobs:/opt/bitnami/spark/jobs
     networks:
