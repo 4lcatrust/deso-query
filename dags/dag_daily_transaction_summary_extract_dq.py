@@ -50,7 +50,7 @@ with DAG(
         "spark.hadoop.fs.s3a.impl": "org.apache.hadoop.fs.s3a.S3AFileSystem",
         "spark.hadoop.fs.s3a.path.style.access": "true",
         "spark.hadoop.fs.s3a.connection.ssl.enabled": "false",
-
+        "spark.hadoop.fs.defaultFS": "file:///",
         # JDBC jar via Maven (no extraClassPath/globs)
         "spark.jars.packages": "org.postgresql:postgresql:42.7.4",
 
@@ -59,6 +59,8 @@ with DAG(
         "spark.executor.memory": "1g",
         "spark.executor.cores": "1",
         "spark.executor.instances": "1",
+        "spark.livy.server.interactive": "false",
+        "spark.yarn.submit.waitAppCompletion": "true"
         },
         args=[
             "--pg_url", get_airflow_variables("POSTGRES_JDBC_URL"),

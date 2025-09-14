@@ -48,6 +48,17 @@ RUN set -eux; \
 COPY ./livy/livy.conf ${LIVY_HOME}/conf/livy.conf
 
 EXPOSE 8998
+
+RUN groupadd -g 1001 airflow || true \
+ && useradd -u 1001 -g 1001 -m -s /sbin/nologin airflow || true
+
+ENV JAVA_TOOL_OPTIONS=""
+
+ENV USER="airflow" \
+    HOME="/home/airflow" \
+    HADOOP_USER_NAME="airflow" \
+    JAVA_TOOL_OPTIONS="-Duser.name=airflow ${JAVA_TOOL_OPTIONS}"
+
 USER 1001
 ENTRYPOINT ["/usr/bin/tini","--"]
 CMD ["bash","-lc","${LIVY_HOME}/bin/livy-server start \

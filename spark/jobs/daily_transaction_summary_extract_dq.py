@@ -6,6 +6,7 @@ import time
 import logging
 import json
 import argparse
+import sys
 from datetime import datetime
 
 # Configure logging
@@ -53,6 +54,7 @@ TABLE_SOURCE = [
 ]
 
 def create_spark_session(app_name: str):
+    os.environ["HADOOP_USER_NAME"] = "airflow"
     spark = SparkSession.builder \
         .appName(app_name) \
         .config("spark.hadoop.fs.s3a.access.key", os.getenv("MINIO_ACCESS_KEY", "minioadmin")) \
@@ -61,6 +63,10 @@ def create_spark_session(app_name: str):
         .config("spark.hadoop.fs.s3a.impl", "org.apache.hadoop.fs.s3a.S3AFileSystem") \
         .config("spark.hadoop.fs.s3a.path.style.access", "true") \
         .config("spark.hadoop.fs.s3a.connection.ssl.enabled", "false") \
+        .config("spark.hadoop.security.authentication", "simple") \
+        .config("spark.hadoop.security.authorization", "false") \
+        .config("spark.hadoop.fs.defaultFS", "file:///") \
+        .config("spark.sql.warehouse.dir", "file:/tmp/spark-warehouse") \
         .getOrCreate()
     return spark
 
@@ -112,62 +118,70 @@ def main():
     
     spark = create_spark_session("Daily-Transaction-Summary-Extract-and-DQ")
 
-    jdbc_url = args.pg_url
-    jdbc_user = args.pg_user
-    jdbc_pass = args.pg_pass
-    staging_path = "s3a://staging"
-    dq_path = "s3a://staging-dq"
-    current_date = args.exec_date
-    
-    dataframes = {}
+    try:
+        jdbc_url = args.pg_url
+        jdbc_user = args.pg_user
+        jdbc_pass = args.pg_pass
+        staging_path = "s3a://staging"
+        dq_path = "s3a://staging-dq"
+        current_date = args.exec_date
+        
+        dataframes = {}
 
-    for schema, table in TABLE_SOURCE:
-        df = spark.read \
-            .format("jdbc") \
-            .option("url", jdbc_url) \
-            .option("dbtable", f"{schema}.{table}") \
-            .option("user", jdbc_user) \
-            .option("password", jdbc_pass) \
-            .option("driver", "org.postgresql.Driver") \
-            .load()
+        for schema, table in TABLE_SOURCE:
+            df = spark.read \
+                .format("jdbc") \
+                .option("url", jdbc_url) \
+                .option("dbtable", f"{schema}.{table}") \
+                .option("user", jdbc_user) \
+                .option("password", jdbc_pass) \
+                .option("driver", "org.postgresql.Driver") \
+                .load()
 
-        dataframes[table] = df
-        df.write.parquet(f"{staging_path}/{current_date}.{schema}.{table}.parquet", mode="overwrite")
-        logger.info(f"✅ Extracted and saved: {table}")
+            dataframes[table] = df
+            df.write.parquet(f"{staging_path}/{current_date}.{schema}.{table}.parquet", mode="overwrite")
+            logger.info(f"✅ Extracted and saved: {table}")
 
-    all_metrics = {}
-    dq_records = []
+        all_metrics = {}
+        dq_records = []
 
-    for table, df in dataframes.items():
-        metrics = dq_check(df, table)
-        all_metrics[table] = metrics
-        for metric, val in metrics.items():
-            dq_records.append({
-                "dag_id": "dag_daily_transaction_summary",
-                "table_name": table,
-                "metric": metric,
-                "value": float(val),
-                "processed_at": datetime.now().isoformat(),
-                "exec_date": current_date
-            })
+        for table, df in dataframes.items():
+            metrics = dq_check(df, table)
+            all_metrics[table] = metrics
+            for metric, val in metrics.items():
+                dq_records.append({
+                    "dag_id": "dag_daily_transaction_summary",
+                    "table_name": table,
+                    "metric": metric,
+                    "value": float(val),
+                    "processed_at": datetime.now().isoformat(),
+                    "exec_date": current_date
+                })
 
-    dq_df = spark.createDataFrame(dq_records)
-    dq_df.write.mode("overwrite").partitionBy("exec_date").parquet(f"{dq_path}/metrics.parquet")
-    logger.info("✅ DQ metrics saved to MinIO (staging-dq)")
+        dq_df = spark.createDataFrame(dq_records)
+        dq_df.write.mode("overwrite").partitionBy("exec_date").parquet(f"{dq_path}/metrics.parquet")
+        logger.info(f"Writing {len(dq_records)} DQ records for {current_date}")
+        logger.info("✅ DQ metrics saved to MinIO (staging-dq)")
 
-    logger.info(json.dumps(all_metrics, indent=2))
+        logger.info(json.dumps(all_metrics, indent=2))
 
-    failed = {
-        table: {m: v for m, v in metrics.items() if v < 90}
-        for table, metrics in all_metrics.items()
-        if any(v < 90 for v in metrics.values())
-    }
+        failed = {
+            table: {m: v for m, v in metrics.items() if v < 90}
+            for table, metrics in all_metrics.items()
+            if any(v < 90 for v in metrics.values())
+        }
 
-    if failed:
-        raise Exception(f"❌ DQ check failed: {json.dumps(failed, indent=2)}")
-    else:
-        logger.info("✅ All DQ checks passed")
-
+        if failed:
+            raise Exception(f"❌ DQ check failed: {json.dumps(failed, indent=2)}")
+        else:
+            logger.info("✅ All DQ checks passed")
+    finally:
+        try:
+            spark.stop()
+            logger.info("✅ Spark stopped cleanly")
+        except Exception as e:
+            logger.warning(f"⚠️ Error during spark.stop(): {e}")
+        os._exit(0)
 
 if __name__ == "__main__":
     main()
