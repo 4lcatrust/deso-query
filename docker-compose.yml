@@ -20,7 +20,7 @@ services:
 
   # DB Sink
   clickhouse:
-    image: clickhouse/clickhouse-server:latest
+    image: clickhouse/clickhouse-server:24.8-alpine 
     container_name: clickhouse_db
     restart: always
     environment:
