@@ -33,7 +33,7 @@ with DAG(
             "spark.driver.memory": "512m",
             "spark.executor.memory": "512m",
             },
-        polling_interval=5,      # seconds; >0 means “keep polling until done”
+        polling_interval=5
     )
 
     spark_test_job
